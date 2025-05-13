@@ -341,4 +341,32 @@ rec {
       description = "Diagnostic tool for ESP-IDF";
     };
   };
+
+  esp-debug-backend = buildPythonPackage rec {
+    pname = "esp-debug-backend";
+    version = "1.0.3";
+
+    format = "pyproject";
+
+    src = fetchPypi {
+      inherit version;
+      pname = "esp-debug-backend";
+      sha256 = "sha256-HqeQKR6l3yBkK7ABHNpE26lpL8Uwroc6hxWNv4QzHgs=";
+    };
+
+    doCheck = false;
+
+    dependencies = [
+      pygdbmi
+    ];
+
+    propagatedBuildInputs = [
+      pyelftools
+      setuptools
+    ];
+
+    meta = {
+      homepage = "https://github.com/espressif/esp-debug-backend";
+    };
+  };
 }
