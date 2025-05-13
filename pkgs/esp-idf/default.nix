@@ -89,6 +89,8 @@ let
 
         # The esp idf vscode extension seems to want pip, too
         pip
+        esp-debug-backend
+        websocket_client
       ]
     )
   );
