@@ -1,8 +1,8 @@
 {
   owner ? "espressif",
   repo ? "esp-idf",
-  rev ? "v5.4.1",
-  sha256 ? "sha256-5hwoy4QJFZdLApybV0LCxFD2VzM3Y6V7Qv5D3QjI16I=",
+  rev ? "v5.5.2",
+  sha256 ? "sha256-xYlj8uG/nxeMMNdAY8AbBiA7RYuEOOxoDyb+wVK8QWc=",
   toolsToInclude ? [
     "xtensa-esp-elf-gdb"
     "riscv32-esp-elf-gdb"
@@ -13,6 +13,7 @@
     "openocd-esp32"
     "esp-rom-elfs"
   ],
+  extraPythonPackages ? (pythonPackages: [ ]),
   stdenv,
   lib,
   fetchFromGitHub,
@@ -33,6 +34,7 @@
   ninja,
   ncurses5,
   dfu-util,
+  writeShellApplication,
 }:
 
 let
@@ -75,11 +77,14 @@ let
         idf-component-manager
         esp-coredump
         esptool
+        esp-idf-diag
         esp-idf-kconfig
         esp-idf-monitor
         esp-idf-nvs-partition-gen
-        esp-idf-size
         esp-idf-panic-decoder
+        esp-idf-size
+        tree-sitter
+        tree-sitter-grammars.tree-sitter-c
         pyclang
         psutil
         rich
@@ -92,75 +97,78 @@ let
         esp-debug-backend
         websocket_client
       ]
+      ++ (extraPythonPackages pythonPackages)
     )
   );
-in
-stdenv.mkDerivation rec {
-  pname = "esp-idf";
-  version = rev;
+  esp-idf = stdenv.mkDerivation rec {
+    pname = "esp-idf";
+    version = rev;
 
-  inherit src;
+    inherit src;
 
-  # This is so that downstream derivations will have IDF_PATH set.
-  setupHook = ./setup-hook.sh;
+    # This is so that downstream derivations will have IDF_PATH set.
+    setupHook = ./setup-hook.sh;
 
-  nativeBuildInputs = [ makeWrapper ];
+    nativeBuildInputs = [ makeWrapper ];
 
-  propagatedBuildInputs = [
-    # This is in propagatedBuildInputs so that downstream derivations will run
-    # the Python setup hook and get PYTHONPATH set up correctly.
-    customPython
+    propagatedBuildInputs = [
+      # This is in propagatedBuildInputs so that downstream derivations will run
+      # the Python setup hook and get PYTHONPATH set up correctly.
+      customPython
 
-    # Tools required to use ESP-IDF.
-    git
-    wget
-    gnumake
+      # Tools required to use ESP-IDF.
+      git
+      wget
+      gnumake
 
-    flex
-    bison
-    gperf
-    pkg-config
+      flex
+      bison
+      gperf
+      pkg-config
 
-    cmake
-    ninja
+      cmake
+      ninja
 
-    ncurses5
+      ncurses5
 
-    dfu-util
-  ] ++ builtins.attrValues tools;
+      dfu-util
+    ] ++ builtins.attrValues tools;
 
-  # We are including cmake and ninja so that downstream derivations (eg. shells)
-  # get them in their environment, but we don't actually want any of their build
-  # hooks to run, since we aren't building anything with them right now.
-  dontUseCmakeConfigure = true;
-  dontUseNinjaBuild = true;
-  dontUseNinjaInstall = true;
-  dontUseNinjaCheck = true;
+    # We are including cmake and ninja so that downstream derivations (eg. shells)
+    # get them in their environment, but we don't actually want any of their build
+    # hooks to run, since we aren't building anything with them right now.
+    dontUseCmakeConfigure = true;
+    dontUseNinjaBuild = true;
+    dontUseNinjaInstall = true;
+    dontUseNinjaCheck = true;
 
-  __structuredAttrs = true;
-  inherit toolEnv;
+    __structuredAttrs = true;
+    inherit toolEnv;
 
-  installPhase = ''
-    mkdir -p $out
-    cp -rv . $out/
+    installPhase = ''
+      mkdir -p $out
+      cp -rv . $out/
 
-    # Override the version read by ESP IDF (as it can't be read in the usual way
-    # since we don't include the .git directory with that metadata).
-    # NOTE: This doesn't perfectly replicate the way the commit name is
-    # formatted with the standard behavior using `git describe`, but it's
-    # still better than nothing.
-    echo "${rev}" > $out/version.txt
+    # Inspired from how idf.py find the version in the sources.
+    # https://github.com/espressif/esp-idf/blob/4e036983a751e4667ade94c8f6f6bf1e7f78eff0/tools/idf_py_actions/tools.py#L82
+    IDF_VERSION=$(cat $out/tools/cmake/version.cmake | awk '
+      /set\(IDF_VERSION_MAJOR/ && match($0, /[0-9]+/, m) { major = m[0] }
+      /set\(IDF_VERSION_MINOR/ && match($0, /[0-9]+/, m) { minor = m[0] }
+      /set\(IDF_VERSION_PATCH/ && match($0, /[0-9]+/, m) { patch = m[0] }
+      END { print major "." minor "." patch }
+    ')
+    echo "v$IDF_VERSION" > $out/version.txt
 
-    # Link the Python environment in so that:
-    # - The setup hook can set IDF_PYTHON_ENV_PATH to it.
-    # - In shell derivations, the Python setup hook will add the site-packages
-    #   directory to PYTHONPATH.
-    ln -s ${customPython} $out/python-env
-    ln -s ${customPython}/lib $out/lib
+      # Link the Python environment in so that:
+      # - The setup hook can set IDF_PYTHON_ENV_PATH to it.
+      # - In shell derivations, the Python setup hook will add the site-packages
+      #   directory to PYTHONPATH.
+      ln -s ${customPython} $out/python-env
+      ln -s ${customPython}/lib $out/lib
 
-    for key in "''${!toolEnv[@]}"; do
-      printf "export $key=%q" "''${toolEnv[$key]}"
-    done > $out/.tool-env
+      for key in "''${!toolEnv[@]}"; do
+        printf "export $key=%q" "''${toolEnv[$key]}"
+      done > $out/.tool-env
 
     # make esp-idf cmake git version detection happy
     cd $out
@@ -168,9 +176,46 @@ stdenv.mkDerivation rec {
     git config user.email "nixbld@localhost"
     git config user.name "nixbld"
     git commit --date="1970-01-01 00:00:00" --allow-empty -m "make idf happy"
+
+    # Create a version tag so git describe works
+    git tag "$(cat $out/version.txt)" HEAD
+
+    # Fix Ownership/Permissions Issues with esp-idf repo
+    #   - This package is typically built by a different user than the "end user"
+    #   - The esp-idf build tools execute git on its own working tree, which requires end user access
+    #   - It is not feasible to change ownership or permissions of nix store content, and we don't want to just run as root, so
+    #     the solution it to explicitly configure the git client to trust the esp-idf directory in the nix store
+    #   - Here we add a system-level git configuration file in the package derivation.
+    #   - Git config file location is referred to by the GIT_CONFIG_GLOBAL var exported by shell hook at runtime
+    #   - User- and repo-level git configs are not masked, all are read and merged per https://git-scm.com/docs/git-config#FILES
+    mkdir -p $out/etc
+    cat > $out/etc/gitconfig << EOF
+[safe]
+	directory = $out
+EOF
   '';
 
-  passthru = {
-    inherit tools allTools toolEnv;
+    passthru = {
+      inherit tools allTools toolEnv;
+    };
   };
+  buildExample = callPackage ./build-example.nix { inherit esp-idf; };
+  targets = [
+    "esp32"
+    "esp32c2"
+    "esp32c3"
+    "esp32s2"
+    "esp32s3"
+    "esp32c5"
+    "esp32c6"
+    "esp32h2"
+    "esp32p4"
+    "esp32c61"
+    "esp32h21"
+  ];
+  in
+esp-idf // {
+  examples = lib.genAttrs targets (target: callPackage ./examples.nix {
+    inherit esp-idf buildExample target;
+  });
 }

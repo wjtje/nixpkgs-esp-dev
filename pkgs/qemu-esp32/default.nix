@@ -43,8 +43,8 @@
       src = fetchFromGitHub {
         owner = "espressif";
         repo = "qemu";
-        rev = "esp-develop-9.2.2-20250228";
-        hash = "sha256-cxYg2ssVIkoYhwpLD1b2GW1nPIoPyHnW/gIrPJV0vTI=";
+        rev = "esp-develop-9.2.2-20250817";
+        hash = "sha256-482BeOmWkaOn2H3inH7sZADsxV331Nssbs+6iYCTFCg=";
         nativeBuildInputs = [
           cacert
           git
