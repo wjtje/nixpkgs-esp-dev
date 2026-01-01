@@ -95,7 +95,7 @@ let
         # The esp idf vscode extension seems to want pip, too
         pip
         esp-debug-backend
-        websocket_client
+        websocket-client
       ]
       ++ (extraPythonPackages pythonPackages)
     )
@@ -132,7 +132,8 @@ let
       ncurses5
 
       dfu-util
-    ] ++ builtins.attrValues tools;
+    ]
+    ++ builtins.attrValues tools;
 
     # We are including cmake and ninja so that downstream derivations (eg. shells)
     # get them in their environment, but we don't actually want any of their build
@@ -146,54 +147,54 @@ let
     inherit toolEnv;
 
     installPhase = ''
-      mkdir -p $out
-      cp -rv . $out/
+            mkdir -p $out
+            cp -rv . $out/
 
-    # Inspired from how idf.py find the version in the sources.
-    # https://github.com/espressif/esp-idf/blob/4e036983a751e4667ade94c8f6f6bf1e7f78eff0/tools/idf_py_actions/tools.py#L82
-    IDF_VERSION=$(cat $out/tools/cmake/version.cmake | awk '
-      /set\(IDF_VERSION_MAJOR/ && match($0, /[0-9]+/, m) { major = m[0] }
-      /set\(IDF_VERSION_MINOR/ && match($0, /[0-9]+/, m) { minor = m[0] }
-      /set\(IDF_VERSION_PATCH/ && match($0, /[0-9]+/, m) { patch = m[0] }
-      END { print major "." minor "." patch }
-    ')
-    echo "v$IDF_VERSION" > $out/version.txt
+          # Inspired from how idf.py find the version in the sources.
+          # https://github.com/espressif/esp-idf/blob/4e036983a751e4667ade94c8f6f6bf1e7f78eff0/tools/idf_py_actions/tools.py#L82
+          IDF_VERSION=$(cat $out/tools/cmake/version.cmake | awk '
+            /set\(IDF_VERSION_MAJOR/ && match($0, /[0-9]+/, m) { major = m[0] }
+            /set\(IDF_VERSION_MINOR/ && match($0, /[0-9]+/, m) { minor = m[0] }
+            /set\(IDF_VERSION_PATCH/ && match($0, /[0-9]+/, m) { patch = m[0] }
+            END { print major "." minor "." patch }
+          ')
+          echo "v$IDF_VERSION" > $out/version.txt
 
-      # Link the Python environment in so that:
-      # - The setup hook can set IDF_PYTHON_ENV_PATH to it.
-      # - In shell derivations, the Python setup hook will add the site-packages
-      #   directory to PYTHONPATH.
-      ln -s ${customPython} $out/python-env
-      ln -s ${customPython}/lib $out/lib
+            # Link the Python environment in so that:
+            # - The setup hook can set IDF_PYTHON_ENV_PATH to it.
+            # - In shell derivations, the Python setup hook will add the site-packages
+            #   directory to PYTHONPATH.
+            ln -s ${customPython} $out/python-env
+            ln -s ${customPython}/lib $out/lib
 
-      for key in "''${!toolEnv[@]}"; do
-        printf "export $key=%q" "''${toolEnv[$key]}"
-      done > $out/.tool-env
+            for key in "''${!toolEnv[@]}"; do
+              printf "export $key=%q" "''${toolEnv[$key]}"
+            done > $out/.tool-env
 
-    # make esp-idf cmake git version detection happy
-    cd $out
-    git init .
-    git config user.email "nixbld@localhost"
-    git config user.name "nixbld"
-    git commit --date="1970-01-01 00:00:00" --allow-empty -m "make idf happy"
+          # make esp-idf cmake git version detection happy
+          cd $out
+          git init .
+          git config user.email "nixbld@localhost"
+          git config user.name "nixbld"
+          git commit --date="1970-01-01 00:00:00" --allow-empty -m "make idf happy"
 
-    # Create a version tag so git describe works
-    git tag "$(cat $out/version.txt)" HEAD
+          # Create a version tag so git describe works
+          git tag "$(cat $out/version.txt)" HEAD
 
-    # Fix Ownership/Permissions Issues with esp-idf repo
-    #   - This package is typically built by a different user than the "end user"
-    #   - The esp-idf build tools execute git on its own working tree, which requires end user access
-    #   - It is not feasible to change ownership or permissions of nix store content, and we don't want to just run as root, so
-    #     the solution it to explicitly configure the git client to trust the esp-idf directory in the nix store
-    #   - Here we add a system-level git configuration file in the package derivation.
-    #   - Git config file location is referred to by the GIT_CONFIG_GLOBAL var exported by shell hook at runtime
-    #   - User- and repo-level git configs are not masked, all are read and merged per https://git-scm.com/docs/git-config#FILES
-    mkdir -p $out/etc
-    cat > $out/etc/gitconfig << EOF
-[safe]
-	directory = $out
-EOF
-  '';
+          # Fix Ownership/Permissions Issues with esp-idf repo
+          #   - This package is typically built by a different user than the "end user"
+          #   - The esp-idf build tools execute git on its own working tree, which requires end user access
+          #   - It is not feasible to change ownership or permissions of nix store content, and we don't want to just run as root, so
+          #     the solution it to explicitly configure the git client to trust the esp-idf directory in the nix store
+          #   - Here we add a system-level git configuration file in the package derivation.
+          #   - Git config file location is referred to by the GIT_CONFIG_GLOBAL var exported by shell hook at runtime
+          #   - User- and repo-level git configs are not masked, all are read and merged per https://git-scm.com/docs/git-config#FILES
+          mkdir -p $out/etc
+          cat > $out/etc/gitconfig << EOF
+      [safe]
+      	directory = $out
+      EOF
+    '';
 
     passthru = {
       inherit tools allTools toolEnv;
@@ -213,9 +214,13 @@ EOF
     "esp32c61"
     "esp32h21"
   ];
-  in
-esp-idf // {
-  examples = lib.genAttrs targets (target: callPackage ./examples.nix {
-    inherit esp-idf buildExample target;
-  });
+in
+esp-idf
+// {
+  examples = lib.genAttrs targets (
+    target:
+    callPackage ./examples.nix {
+      inherit esp-idf buildExample target;
+    }
+  );
 }

@@ -108,6 +108,7 @@ let
         "libpython3.8.so.1.0"
         "libpython3.7.so.1.0"
         "libpython3.6.so.1.0"
+        "libxml2.so.2"
       ];
 
       phases = [ "unpackPhase" "installPhase" ] ++ lib.optionals stdenv.isLinux [ "fixupPhase" ];
